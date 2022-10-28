@@ -7,11 +7,12 @@ namespace ILIAS\Plugin\LocalRegistration\UI\Component;
 
 use ILIAS\UI\Component\Input\Container\Form\Form;
 use ILIAS\UI\Component\Input\Container\Form\Standard;
+use ILIAS\UI\Component\Link\Standard as Link;
 
 /**
  * This describes a standard form.
  */
-interface LoginForm extends Standard
+interface RegisterForm extends Standard
 {
 
     /**
@@ -24,18 +25,18 @@ interface LoginForm extends Standard
 	/**
 	 * Get the links this form posts its result to.
 	 *
-	 * @return    array
+	 * @return    array<Link>
 	 */
 	public function getLinks(): array;
 
 	/**
 	 * Get a login form like this where links are attached.
 	 *
-	 * @param    array $links
+	 * @param    array<Link> $links
 	 *
-	 * @return    LoginForm
+	 * @return    RegisterForm
 	 */
-	public function withLinks(array $links): LoginForm;
+	public function withLinks(array $links): RegisterForm;
 
 	/**
 	 * Evaluates form and shows errors

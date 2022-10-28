@@ -10,7 +10,7 @@ use ILIAS\UI\Implementation\Component\Input;
 /**
  * This implements a standard form.
  */
-class LoginForm extends Input\Container\Form\Standard implements \ILIAS\Plugin\LocalRegistration\UI\Component\LoginForm
+class RegisterForm extends Input\Container\Form\Standard implements \ILIAS\Plugin\LocalRegistration\UI\Component\RegisterForm
 {
 	protected array $links;
 
@@ -25,7 +25,7 @@ class LoginForm extends Input\Container\Form\Standard implements \ILIAS\Plugin\L
 		return $this->links;
 	}
 
-	public function withLinks(array $links): \ILIAS\Plugin\LocalRegistration\UI\Component\LoginForm
+	public function withLinks(array $links): \ILIAS\Plugin\LocalRegistration\UI\Component\RegisterForm
 	{
 		$clone = clone $this;
 		$clone->links = $links;

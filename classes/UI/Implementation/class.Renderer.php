@@ -15,7 +15,7 @@ class Renderer extends AbstractComponentRenderer
 	protected function getComponentInterfaceName()
 	{
 		return [
-			\ILIAS\Plugin\LocalRegistration\UI\Component\LoginForm::class
+			\ILIAS\Plugin\LocalRegistration\UI\Component\RegisterForm::class
 		];
 	}
 
@@ -29,10 +29,8 @@ class Renderer extends AbstractComponentRenderer
 		 */
 		$this->checkComponent($component);
 
-		$component = $this->setSignals($component);
-
 		switch (true) {
-			case ($component instanceof \ILIAS\Plugin\LocalRegistration\UI\Component\LoginForm):
+			case ($component instanceof \ILIAS\Plugin\LocalRegistration\UI\Component\RegisterForm):
 				return $this->renderLoginForm($component, $default_renderer);
 			default:
 				throw new \LogicException("Cannot render '" . get_class($component) . "'");
@@ -49,8 +47,39 @@ class Renderer extends AbstractComponentRenderer
 		return $name;
 	}
 
-	private function renderLoginForm(\ILIAS\Plugin\LocalRegistration\UI\Component\LoginForm $component, \ILIAS\UI\Renderer $default_renderer)
+	private function renderLoginForm(\ILIAS\Plugin\LocalRegistration\UI\Component\RegisterForm $component, \ILIAS\UI\Renderer $default_renderer)
 	{
-		return "";
+		$tpl = $this->getTemplate("tpl.register_form.html", true, true);
+
+		if ($component->getPostURL() != "") {
+			$tpl->setCurrentBlock("action");
+			$tpl->setVariable("URL", $component->getPostURL());
+			$tpl->parseCurrentBlock();
+		}
+
+		$f = $this->getUIFactory();
+		$submit_button = $f->button()->standard($this->txt("register"), "");
+
+		$tpl->setVariable("BUTTONS_TOP", $default_renderer->render($submit_button));
+		$tpl->setVariable("BUTTONS_BOTTOM", $default_renderer->render($submit_button));
+
+		$tpl->setVariable("INPUTS", $default_renderer->render($component->getInputGroup()));
+
+		$error = $component->getError();
+		if (!is_null($error)) {
+			$tpl->setVariable("ERROR", $error);
+		}
+		if(count($component->getLinks()) > 0 ){
+			$tpl->setCurrentBlock("links");
+
+			foreach ($component->getLinks() as $link){
+				$tpl->setCurrentBlock("link");
+				$tpl->setVariable("LINK_ACTION", $link->getAction());
+				$tpl->setVariable("LINK_TEXT", $link->getLabel());
+				$tpl->parseCurrentBlock();
+			}
+		}
+
+		return $tpl->get();
 	}
 }

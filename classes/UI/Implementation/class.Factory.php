@@ -5,10 +5,9 @@ declare(strict_types=1);
 namespace ILIAS\Plugin\LocalRegistration\UI\Implementation;
 
 use ILIAS\Plugin\LocalRegistration\UI;
-use ILIAS\Plugin\LocalRegistration\UI\Component\LoginForm;
-use ILIAS\Plugin\LongEssayTask\UI\Implementation\Numeric;
-use ILIAS\UI\Implementation\Component\SignalGeneratorInterface;
-
+use ILIAS\Plugin\LocalRegistration\UI\Component\RegisterForm;
+use ILIAS\UI\Implementation\Component\Input\Container\Form\Standard;
+use ILIAS\UI\Implementation\Component\Input;
 
 /**
  * Class Factory
@@ -18,46 +17,16 @@ use ILIAS\UI\Implementation\Component\SignalGeneratorInterface;
 class Factory implements UI\Component\Factory
 {
 	/**
-	 * @var    Data\Factory
+	 * @var Input\Field\Factory
 	 */
-	protected $data_factory;
+	protected Input\Field\Factory $field_factory;
 
-	/**
-	 * @var SignalGeneratorInterface
-	 */
-	protected $signal_generator;
-
-	/**
-	 * @var \ILIAS\Refinery\Factory
-	 */
-	private $refinery;
-
-	/**
-	 * @var	\ilLanguage
-	 */
-	protected $lng;
-
-	/**
-	 * Factory constructor.
-	 *
-	 * @param SignalGeneratorInterface $signal_generator
-	 * @param Data\Factory $data_factory
-	 * @param \ILIAS\Refinery\Factory $refinery
-	 */
-	public function __construct(
-		SignalGeneratorInterface $signal_generator,
-		Data\Factory $data_factory,
-		\ILIAS\Refinery\Factory $refinery,
-		\ilLanguage $lng
-	) {
-		$this->signal_generator = $signal_generator;
-		$this->data_factory = $data_factory;
-		$this->refinery = $refinery;
-		$this->lng = $lng;
+	public function __construct(Input\Field\Factory $field_factory) {
+		$this->field_factory = $field_factory;
 	}
 
-	public function loginForm(string $post_url, array $inputs, array $links): LoginForm
+	public function registerForm(string $post_url, array $inputs, array $links = []): RegisterForm
 	{
-
+		return new \ILIAS\Plugin\LocalRegistration\UI\Implementation\RegisterForm($this->field_factory, $post_url, $inputs, $links);
 	}
 }

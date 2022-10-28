@@ -1,10 +1,15 @@
 <?php
 
-#include_once("./Services/COPage/classes/class.ilPageComponentPluginGUI.php");
-use ILIAS\Filesystem\Filesystem;
+include_once("./Services/COPage/classes/class.ilPageComponentPluginGUI.php");
+
+use ILIAS\Plugin\LocalRegistration\UI\Implementation\RegisterForm;
 use ILIAS\UI\Component\Input\Container\Form\Form;
 use ILIAS\UI\Factory;
 use ILIAS\UI\Renderer;
+use ILIAS\Plugin\LocalRegistration\UI\Implementation\Factory as PluginUIFactory;
+use ILIAS\Plugin\LocalRegistration\UI\PluginLoader;
+use ILIAS\Plugin\LocalRegistration\UI\PluginRendererFactory;
+use ILIAS\Plugin\LocalRegistration\UI\PluginTemplateFactory;
 
 /**
  * LocalRegistration COPage Plugin
@@ -41,11 +46,11 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 	{
 		global $DIC;
 		parent::__construct();
+		$this->init();
 
 		$this->ctrl = $DIC->ctrl();
 		$this->tpl = $DIC->ui()->mainTemplate();
 		$this->factory = $DIC->ui()->factory();
-		$this->renderer = $DIC->ui()->renderer();
 		$this->request = $DIC->http()->request();
 		$this->rbacreview = $DIC->rbac()->review();
 		$this->user = $DIC->user();
@@ -77,13 +82,43 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 		}
 	}
 
+
+	protected function init(){
+		global $DIC;
+
+		$DIC["plugin"] = function (\ILIAS\DI\Container $dic ) {return $this->getPlugin();};
+
+		$DIC["custom_renderer_loader"] =  function (\ILIAS\DI\Container $dic ) {
+			return new PluginLoader($dic["ui.component_renderer_loader"],
+				new PluginRendererFactory(
+					$dic["ui.factory"],
+					new PluginTemplateFactory($dic["ui.template_factory"], $dic["plugin"], $dic["tpl"]),
+					$dic["lng"],
+					$dic["ui.javascript_binding"],
+					$dic["refinery"],
+					$dic["ui.pathresolver"]
+				)
+			);
+		};
+
+		$DIC["custom_renderer"] = function (\ILIAS\DI\Container $dic) {
+			return new \ILIAS\UI\Implementation\DefaultRenderer(
+				$dic["custom_renderer_loader"]
+			);
+		};
+
+		$DIC["custom_factory"] = function (\ILIAS\DI\Container $dic) {
+			return new PluginUIFactory($dic["ui.factory.input.field"]);
+		};
+	}
+
 	/**
 	 * Form for new elements
 	 */
 	function insert()
 	{
 		$form = $this->initForm(true);
-		$this->tpl->setContent($this->renderer->render($form));
+		$this->tpl->setContent($this->renderer()->render($form));
 	}
 
 	/**
@@ -110,7 +145,7 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 			}
 		}
 
-		$this->tpl->setContent($this->renderer->render($form));
+		$this->tpl->setContent($this->renderer()->render($form));
 	}
 
 	/**
@@ -124,7 +159,7 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 		$this->setTabs("edit");
 
 		$form = $this->initForm();
-		$this->tpl->setContent($this->renderer->render($form));
+		$this->tpl->setContent($this->renderer()->render($form));
 	}
 
 	/**
@@ -153,7 +188,7 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 			}
 		}
 
-		$this->tpl->setContent($this->renderer->render($form));
+		$this->tpl->setContent($this->renderer()->render($form));
 	}
 
 
@@ -222,7 +257,6 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 
 		if($this->getPlugin()->userCanCreate()){
 			$this->ctrl->setParameterByClass("ilObjCategoryGUI", "ref_id", $this->getPlugin()->getParentCategoryRefID());
-			$links[] = $this->factory->divider()->vertical();
 			$links[] = $this->factory->link()->standard("Administrate Accounts",
 				$this->ctrl->getLinkTargetByClass("ilObjCategoryGUI", "listUsers")
 			);
@@ -248,11 +282,12 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 				);
 			}
 		}
+		$form = $form->withLinks($links);
 
-		return $this->renderer->render($form). "<p>".$this->renderer->render($links)."</p>";
+		return $this->renderer()->render($form);
 	}
 
-	private function register(Form $form, array $properties): bool
+	private function register(RegisterForm $form, array $properties): bool
 	{
 		$data = $form->getData();
 
@@ -284,7 +319,7 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 		return false;
 	}
 
-	private function registrationForm($a_disabled = false): \ILIAS\UI\Component\Input\Container\Form\Form
+	private function registrationForm($a_disabled = false): RegisterForm
 	{
 		$this->lng->loadLanguageModule("form");
 		$this->ctrl->saveParameter($this, "ref_id");
@@ -357,7 +392,7 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 			),
 		];
 
-		return $this->factory->input()->container()->form()->standard($action, $inputs);
+		return $this->custom_factory()->registerForm($action, $inputs);
 	}
 
 	private function buildUserImportXML(array $data, array $properties): string
@@ -441,6 +476,24 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 		);
 	}
 
+	/**
+	 * @return Renderer
+	 */
+	private function renderer(): Renderer
+	{
+		global $DIC;
+		return  $DIC["custom_renderer"];
+	}
+
+	/**
+	 * @return PluginUIFactory
+	 */
+	private function custom_factory(): PluginUIFactory
+	{
+		global $DIC;
+		return $DIC["custom_factory"];
+	}
+
 	private function isEmailRefinery(){
 		return $this->refinery->custom()->constraint(
 			function ($var) {
@@ -471,11 +524,11 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 
 	/**
 	 * @return ilLocalRegistrationPlugin
-	 */
+	 /
 	public function getPlugin(): ilLocalRegistrationPlugin
 	{
 		return parent::getPlugin();
-	}
+	}*/
 
 	public function links(){
 		return '<p class="">
