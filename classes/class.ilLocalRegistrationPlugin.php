@@ -12,13 +12,9 @@
 class ilLocalRegistrationPlugin extends ilPageComponentPlugin
 {
 	protected ilObjUser $user;
-
 	protected ilSetting $settings;
-
 	protected ?ilObjCategory $category = null;
-
 	protected ilTree $tree;
-
 	protected ilAccessHandler $access;
 
 
@@ -70,28 +66,6 @@ class ilLocalRegistrationPlugin extends ilPageComponentPlugin
 	function getCssFiles($a_mode)
 	{
 		return array();
-	}
-
-	public function reloadControlStructure() {
-		global $DIC;
-
-		// load control structure
-		$structure_reader = new ilCtrlStructureReader();
-		$structure_reader->readStructure(
-			true,
-			"./" . $this->getDirectory(),
-			$this->getPrefix(),
-			$this->getDirectory()
-		);
-
-		// add config gui to the ctrl calls
-		$DIC->ctrl()->insertCtrlCalls(
-			"ilobjcomponentsettingsgui",
-			ilPlugin::getConfigureClassName(["name" => $this->getPluginName()]),
-			$this->getPrefix()
-		);
-
-		$this->readEventListening();
 	}
 
 	/**
@@ -148,5 +122,12 @@ class ilLocalRegistrationPlugin extends ilPageComponentPlugin
 			return $this->tree->getParentId($ref_id);
 		}
 		return 0;
+	}
+
+	/**
+	 * @return int
+	 */
+	public function getLocalUserCount(): int{
+		return count(ilLocalUser::_getAllUserIds($this->getParentCategoryRefID()));
 	}
 }

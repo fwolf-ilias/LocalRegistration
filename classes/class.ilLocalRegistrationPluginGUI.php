@@ -3,6 +3,7 @@
 include_once("./Services/COPage/classes/class.ilPageComponentPluginGUI.php");
 
 use ILIAS\Plugin\LocalRegistration\UI\Implementation\RegisterForm;
+use ILIAS\Refinery\Custom\Custom\Constraint;
 use ILIAS\UI\Component\Input\Container\Form\Form;
 use ILIAS\UI\Factory;
 use ILIAS\UI\Renderer;
@@ -32,10 +33,8 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 	private ilCtrl $ctrl;
 	private ilGlobalTemplateInterface $tpl;
 	private Factory $factory;
-	private Renderer $renderer;
 	private \Psr\Http\Message\RequestInterface $request;
-	private ilRbacReview $rbacreview;
-	private ilObjUser $user;
+
 	private \ILIAS\Refinery\Factory $refinery;
 	private ilTabsGUI $tabs;
 
@@ -52,8 +51,6 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 		$this->tpl = $DIC->ui()->mainTemplate();
 		$this->factory = $DIC->ui()->factory();
 		$this->request = $DIC->http()->request();
-		$this->rbacreview = $DIC->rbac()->review();
-		$this->user = $DIC->user();
 		$this->refinery = $DIC->refinery();
 		$this->tabs = $DIC->tabs();
 	}
@@ -110,6 +107,10 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 		$DIC["custom_factory"] = function (\ILIAS\DI\Container $dic) {
 			return new PluginUIFactory($dic["ui.factory.input.field"]);
 		};
+
+		$DIC["custom_refinery"] = function (\ILIAS\DI\Container $dic) {
+			return new PluginRefineryFactory($dic['refinery'], $dic["lng"]);
+		};
 	}
 
 	/**
@@ -135,7 +136,8 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 			$properties = array(
 				"welcome" => $data["sec"]["welcome"],
 				"global_role" => $data["sec"]["global_role"],
-				"local_role" => $data["sec"]["local_role"]
+				"local_role" => $data["sec"]["local_role"],
+				"max_user" => $data["sec"]["max_user_enabled"] !== null ? $data["sec"]["max_user_enabled"]["max_user"] : -1
 			);
 
 			if ($this->createElement($properties))
@@ -178,7 +180,8 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 			$properties = array(
 				"welcome" => $data["sec"]["welcome"],
 				"global_role" => $data["sec"]["global_role"],
-				"local_role" => $data["sec"]["local_role"]
+				"local_role" => $data["sec"]["local_role"],
+				"max_user" => $data["sec"]["max_user_enabled"] !== null ? $data["sec"]["max_user_enabled"]["max_user"] : -1
 			);
 
 			if ($this->updateElement($properties))
@@ -203,21 +206,37 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 		$parent_ref_id = $this->plugin->getParentCategoryRefID();
 		$user_gui = new ilObjUserGUI("", $parent_ref_id, true, false);
 		$user_gui->initCreate();
+		$selectable_roles = $user_gui->selectable_roles;
+		if(isset($selectable_roles[2]))
+			unset($selectable_roles[2]);
 
-		$welcome = $this->factory->input()->field()->textarea("Welcome Message");
-		$global_role = $this->factory->input()->field()->select("Global Role", $user_gui->selectable_roles)
+		$welcome = $this->factory->input()->field()->textarea($this->txt("welcome_message"));
+		$global_role = $this->factory->input()->field()->select($this->txt("global_role"), $selectable_roles)
 			->withRequired(true);
-		$local_role = $this->factory->input()->field()->text("Local Role", "Local Role ID String here.");
-		$title = "Create Local Registration Form";
+		$local_role = $this->factory->input()->field()->text($this->txt("local_role"), $this->txt("local_role_byline"))
+			->withAdditionalTransformation($this->custom_refinery()->isLokalRoleIDConstraint($this->txt("local_role_not_valid")));
+
+		$max_user = $this->factory->input()->field()->numeric($this->txt("max_user"))
+			->withAdditionalTransformation($this->refinery->int()->isGreaterThan(-1))
+			->withAdditionalTransformation($this->refinery->numeric()->isNumeric());
+
+		$max_user_enabled = $this->factory->input()->field()->optionalGroup([
+			"max_user" => $max_user
+		], $this->txt("max_user_enable"))->withValue(null);
+
+		$title = $this->txt("cmd_insert");
 		$cmd = "create";
 
 		if (!$a_create)
 		{
 			$prop = $this->getProperties();
+			$max_user = $prop["max_user"];
 			$welcome = $welcome->withValue($prop["welcome"]);
 			$global_role = $global_role->withValue((string)$prop["global_role"]);
 			$local_role = $local_role->withValue((string)$prop["local_role"]);
-			$title = "Edit Local Registration Form";
+			$max_user_enabled = $max_user_enabled->withValue((is_numeric($max_user) && (int)$max_user > -1) ? ["max_user" => (int)$max_user] : null);
+
+			$title = $this->txt("cmd_edit");
 			$cmd = "update";
 		}
 
@@ -226,8 +245,9 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 				"sec" => $this->factory->input()->field()->section([
 				"welcome" => $welcome,
 				"global_role" => $global_role,
-				"local_role" => $local_role
-						], $title)
+				"local_role" => $local_role,
+				"max_user_enabled" => $max_user_enabled
+						], $title),
 			]
 		);
 
@@ -252,20 +272,22 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 	function getElementHTML($a_mode, array $a_properties, $a_plugin_version): string
 	{
 		$disabled = true;
-		$links = [$this->factory->link()->standard("Already have an Account?",
+		$links = [$this->factory->link()->standard($this->txt("already_have_account"),
 			'./login.php?cmd=force_login&lang=' . $this->lng->getUserLanguage())];
 
 		if($this->getPlugin()->userCanCreate()){
 			$this->ctrl->setParameterByClass("ilObjCategoryGUI", "ref_id", $this->getPlugin()->getParentCategoryRefID());
-			$links[] = $this->factory->link()->standard("Administrate Accounts",
+			$links[] = $this->factory->link()->standard($this->txt("administrate_accounts"),
 				$this->ctrl->getLinkTargetByClass("ilObjCategoryGUI", "listUsers")
 			);
 		}elseif ($this->getPlugin()->userCanRegister()){
 			$disabled = false;
 		}else{
+			$title = (($title=ilObjSystemFolder::_getHeaderTitle()) !== "") ? $title : ilSetting::_lookupValue("common", "short_inst_name");
+
 			return isset($a_properties["welcome"]) && $a_properties["welcome"] != ""
 				? str_replace("&#13;", "<br />", $a_properties["welcome"])
-				: "Welcome!";
+				: sprintf($this->txt("welcome"), $title);
 		}
 
 		if(in_array($a_mode, [self::MODE_PRINT, self::MODE_EDIT, self::MODE_OFFLINE, self::MODE_PREVIEW])){
@@ -276,7 +298,7 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 			$form = $form->withRequest($this->request);
 			$success = $this->register($form, $a_properties);
 			if($success){
-				return $this->renderer->render(
+				return $this->renderer()->render(
 					$this->factory->link()->standard($this->lng->txt('login_to_ilias'),
 						'./login.php?cmd=force_login&lang=' . $this->lng->getUserLanguage())
 				);
@@ -287,6 +309,13 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 		return $this->renderer()->render($form);
 	}
 
+	/**
+	 * Register User
+	 *
+	 * @param RegisterForm $form
+	 * @param array $properties PC properties
+	 * @return bool
+	 */
 	private function register(RegisterForm $form, array $properties): bool
 	{
 		$data = $form->getData();
@@ -319,7 +348,13 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 		return false;
 	}
 
-	private function registrationForm($a_disabled = false): RegisterForm
+	/**
+	 * Builds registration Form
+	 *
+	 * @param bool $a_disabled
+	 * @return RegisterForm
+	 */
+	private function registrationForm(bool $a_disabled = false): RegisterForm
 	{
 		$this->lng->loadLanguageModule("form");
 		$this->ctrl->saveParameter($this, "ref_id");
@@ -328,8 +363,8 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 
 		$username = $this->factory->input()->field()->text($this->lng->txt("login"))
 			->withAdditionalTransformation($string->hasMaxLength(80))
-			->withAdditionalTransformation($this->isLoginRefinery())
-			->withAdditionalTransformation($this->loginExistsRefinery())
+			->withAdditionalTransformation($this->custom_refinery()->isLoginConstraint())
+			->withAdditionalTransformation($this->custom_refinery()->loginExistsConstraint())
 			->withRequired(true)
 			->withDisabled($a_disabled);
 		$firstname = $this->factory->input()->field()->text($this->lng->txt("firstname"))
@@ -346,9 +381,9 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 			->withOption("f", $this->lng->txt("salutation_f"))
 			->withOption("m", $this->lng->txt("salutation_m"));
 
-		$same_password = $this->sameAsRefinery($this->lng->txt("passwd_not_match"));
+		$same_password = $this->custom_refinery()->sameAsConstraint($this->lng->txt("passwd_not_match"));
 		$password = $this->factory->input()->field()->password($this->lng->txt("passwd"), ilUtil::getPasswordRequirementsInfo())
-			->withAdditionalTransformation($this->isPasswordRefinery())
+			->withAdditionalTransformation($this->custom_refinery()->isPasswordConstraint())
 			->withAdditionalTransformation($same_password)
 			->withRequired(true)
 			->withDisabled($a_disabled);
@@ -356,10 +391,10 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 			->withAdditionalTransformation($same_password)
 			->withDisabled($a_disabled);
 
-		$same_email = $this->sameAsRefinery($this->lng->txt("email_not_match"));
+		$same_email = $this->custom_refinery()->sameAsConstraint($this->lng->txt("email_not_match"));
 		$email = $this->factory->input()->field()->text($this->lng->txt("email"))
 			->withAdditionalTransformation($string->hasMaxLength(80))
-			->withAdditionalTransformation($this->isEmailRefinery())
+			->withAdditionalTransformation($this->custom_refinery()->isEmailConstraint())
 			->withAdditionalTransformation($same_email)
 			->withRequired(true)
 			->withDisabled($a_disabled);
@@ -378,7 +413,7 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 					"username" => $username,
 					"password" => $password,
 					"password_repeat" => $password_repeat,
-				], "Login Data"
+				], $this->lng->txt("login_data")
 			),
 			"pd" => $this->factory->input()->field()->section(
 				[
@@ -388,15 +423,27 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 					"email" => $email,
 					"email_repeat" => $email_repeat,
 					"matriculation" => $matriculation
-				], "Personal Data"
+				], $this->lng->txt("personal_data")
 			),
 		];
 
 		return $this->custom_factory()->registerForm($action, $inputs);
 	}
 
+	/**
+	 * Builds User Import XML of Form Data and PC properties
+	 *
+	 * @param array $data
+	 * @param array $properties
+	 * @return string
+	 */
 	private function buildUserImportXML(array $data, array $properties): string
 	{
+		// Hard prevent using Admin Role
+		if((int)$properties["global_role"] === 2){
+			$properties["global_role"] = 3;
+		}
+
 		$tpl = $this->getPlugin()->getTemplate("tpl.user_import.xml", true, true);
 		$tpl->setVariable("LANG_CODE", $this->lng->getUserLanguage());
 		$tpl->setVariable("LOGIN", $data["ld"]["username"]);
@@ -409,9 +456,9 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 		}
 		$tpl->setVariable("MATRICULATION", $data["pd"]["matriculation"]);
 		$tpl->setCurrentBlock("role");
-		$tpl->setVariable("ROLE_ID", $this->buildRoleImportID($properties["global_role"]));
+		$tpl->setVariable("ROLE_ID", $this->buildRoleImportID((int) $properties["global_role"]));
 		$tpl->setVariable("ROLE_TYPE", "Global");
-		$tpl->setVariable("ROLE_NAME", ilObjRole::_lookupTitle($properties["global_role"]));
+		$tpl->setVariable("ROLE_NAME", ilObjRole::_lookupTitle((int) $properties["global_role"]));
 		$tpl->parseCurrentBlock();
 
 		if($properties["local_role"] !== "" && ilObjRole::_getIdForImportId($properties["local_role"]) !== 0){
@@ -426,57 +473,9 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 		return $tpl->get();
 	}
 
-	private function isLoginRefinery()
-	{
-		return $this->refinery->custom()->constraint(
-			function ($var) {
-				return ilUtil::isLogin($var);
-			},
-			$this->lng->txt("login_invalid")
-		);
-	}
-	private function loginExistsRefinery()
-	{
-		return $this->refinery->custom()->constraint(
-			function ($var) {
-				return !ilObjUser::_loginExists($var);
-			},
-			$this->lng->txt("login_exists")
-		);
-	}
-
-	private function isPasswordRefinery(){
-		$custom_error = "";
-		return $this->refinery->custom()->constraint(
-			function ($var) use ($custom_error) {
-				return ilUtil::isPassword($var->toString(), $custom_error);
-			},
-			function () use($custom_error) {return $custom_error != '' ? $custom_error : $this->lng->txt("passwd_invalid");}
-		);
-	}
-
-	private function sameAsRefinery(string $msg)
-	{
-		$data = new stdClass();
-		$data->pref_val = null;
-
-		return $this->refinery->custom()->constraint(
-			function ($var) use ($data){
-				if($var instanceof \ILIAS\Data\Password){
-					$var = $var->toString();
-				}
-				if($data->pref_val == null){
-					$data->pref_val = $var;
-					return true;
-				}else{
-					return $data->pref_val === $var;
-				}
-			},
-			$msg
-		);
-	}
-
 	/**
+	 * Custom Renderer to add own UI Components
+	 *
 	 * @return Renderer
 	 */
 	private function renderer(): Renderer
@@ -486,6 +485,8 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 	}
 
 	/**
+	 * Custom Factory for own UI Components
+	 *
 	 * @return PluginUIFactory
 	 */
 	private function custom_factory(): PluginUIFactory
@@ -494,52 +495,48 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 		return $DIC["custom_factory"];
 	}
 
-	private function isEmailRefinery(){
-		return $this->refinery->custom()->constraint(
-			function ($var) {
-				return ilUtil::is_email($var);
-			},
-			$this->lng->txt("email_not_valid")
-		);
+	/**
+	 *
+	 * Custom Factory for own Refinery Objects
+	 * @return PluginRefineryFactory
+	 */
+	private function custom_refinery(): PluginRefineryFactory
+	{
+		global $DIC;
+		return $DIC["custom_refinery"];
 	}
 
-	private function buildRoleImportID($rol_id){
+	/**
+	 * Build Import ID
+	 *
+	 * @param int $rol_id
+	 * @return string
+	 */
+	private function buildRoleImportID(int $rol_id): string
+	{
 		return 'il_' . IL_INST_ID . '_' . ilObject::_lookupType($rol_id) . '_' . $rol_id;
 	}
 
 	/**
-	 * Set tabs
-	 *
-	 * @param
-	 * @return
+	 * @param string $variable
+	 * @return string
 	 */
-	function setTabs($a_active)
+	private function txt(string $variable): string{
+		return $this->getPlugin()->txt($variable);
+	}
+
+	/**
+	 * PC Configuration Tab
+	 *
+	 * @param string $a_active Active tab ID
+	 * @return void
+	 */
+	function setTabs(string $a_active)
 	{
 		$this->tabs->addTab("edit", $this->lng->txt("settings"),
 			$this->ctrl->getLinkTarget($this, "edit"));
 		$this->tabs->setForcePresentationOfSingleTab(true);
 		$this->tabs->setBack2Target($this->lng->txt("cancel"), $this->ctrl->getLinkTarget($this, "cancel"));
 		$this->tabs->activateTab($a_active);
-	}
-
-	/**
-	 * @return ilLocalRegistrationPlugin
-	 /
-	public function getPlugin(): ilLocalRegistrationPlugin
-	{
-		return parent::getPlugin();
-	}*/
-
-	public function links(){
-		return '<p class="">
-		
-<a class="il_ContainerItemCommand" href="../../../../../../../../login.php?lang=en&amp;client_id=edutiek">Already have an account?</a>
-
-
-<a class="il_ContainerItemCommand" href="../../../../../../../../index.php?client_id=edutiek&amp;lang=en">Administrate Accounts</a>
-
-<a class="il_ContainerItemCommand" href="../../../../../../../../index.php?client_id=edutiek&amp;lang=en">Settings</a>
-
-</p>';
 	}
 }

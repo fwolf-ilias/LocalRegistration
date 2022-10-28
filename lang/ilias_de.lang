@@ -1,0 +1,20 @@
+//
+// Copyright (c) 2021 ILIAS open source, Extended GPL, see docs/LICENSE */
+//
+// @author Fred Neumann <fred.neumann@fau.de>
+// @version $Id$
+//
+
+<!-- language file start -->
+cmd_insert#:#Lokale Regististrierung einfügen
+cmd_edit#:#Lokale Regististrierung bearbeiten
+welcome_message#:#Begrüßung
+global_role#:#Globale Rolle
+local_role#:#Lokale Rolle
+local_role_byline#:#ILIAS ID der lokalen Rolle aus den Rollen-Einstellungen.
+max_user#:#Maximale Benutzeranzahl
+max_user_enable#:#Maximale Benutzeranzahl aktiviert
+local_role_not_valid#:#Lokale Rolle ist falsch!
+already_have_account#:#Haben Sie bereits ein Konto?
+administrate_accounts#:#Benutzerkonten Verwalten
+welcome#:#Wilkommen auf der Platform %s!
