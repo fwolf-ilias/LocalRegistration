@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE Users PUBLIC "-//ILIAS//DTD UserImport//EN"
+        "http://docu.ilias.de/xml/ilias_user_5_3.dtd"><!--User of ilias system-->
+<Users>
+    <UDFDefinitions></UDFDefinitions>
+    <User Id="" Language="{LANG_CODE}" Action="Insert">
+        <Login>{LOGIN}</Login>
+        <!-- BEGIN role -->
+        <Role Id="{ROLE_ID}" Type="{ROLE_TYPE}">{ROLE_NAME}</Role>
+        <!-- END role -->
+        <Firstname>{FIRSTNAME}</Firstname>
+        <Lastname>{LASTNAME}</Lastname>
+        <Password Type="PLAIN">{PASSWORD}</Password>
+        <Email>{EMAIL}</Email>
+        <!-- BEGIN gender -->
+        <Gender>{GENDER}</Gender>
+        <!-- BEGIN gender -->
+        <Matriculation>{MATRICULATION}</Matriculation>
+        <Active>true</Active>
+        <AuthMode type="default"/>
+
+    </User>
+</Users>
