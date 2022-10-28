@@ -13,11 +13,13 @@ use ILIAS\UI\Implementation\Component\Input;
 class RegisterForm extends Input\Container\Form\Standard implements \ILIAS\Plugin\LocalRegistration\UI\Component\RegisterForm
 {
 	protected array $links;
+	protected string $info_text;
 
     public function __construct(Input\Field\Factory $input_factory, $post_url, array $inputs, array $links)
     {
         parent::__construct($input_factory, $post_url, $inputs);
 		$this->links = $links;
+		$this->info_text = "";
     }
 
 	public function getLinks(): array
@@ -42,5 +44,18 @@ class RegisterForm extends Input\Container\Form\Standard implements \ILIAS\Plugi
 		}
 
 		return $content->value();
+	}
+
+	public function getInfoText(): string
+	{
+		return $this->info_text;
+	}
+
+	public function withInfoText(string $text): \ILIAS\Plugin\LocalRegistration\UI\Component\RegisterForm
+	{
+		$clone = clone $this;
+		$clone->info_text = $text;
+
+		return $clone;
 	}
 }

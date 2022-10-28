@@ -18,3 +18,6 @@ local_role_not_valid#:#Lokale Rolle ist falsch!
 already_have_account#:#Haben Sie bereits ein Konto?
 administrate_accounts#:#Benutzerkonten Verwalten
 welcome#:#Wilkommen auf der Platform %s!
+free_places#:#Es sind noch <b>%d</b> von <b>%d</b> Plätze frei.
+occupied_places#:#Es sind <b>%d</b> von <b>%d</b> Plätzen belegt.
+no_free_places#:#Es sind alle Plätze belegt.

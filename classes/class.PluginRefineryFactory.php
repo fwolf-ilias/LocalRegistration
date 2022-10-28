@@ -107,8 +107,8 @@ class PluginRefineryFactory
 				if($allow_blank && in_array($var, ["", null]))
 					return true;
 
-				$id = ilObjRole::_getIdForImportId($var);
-				return is_int($id) && $id > 0;
+				$id = ilUtil::__extractId($var, IL_INST_ID);
+				return is_int($id) && $id > 0 && ilObject::_lookupType($id) == "role";
 			},
 			$msg
 		);

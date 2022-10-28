@@ -29,6 +29,7 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 	const MODE_PRESENTATION = 'presentation';
 	const MODE_PREVIEW = 'preview';
 
+	protected static bool $inited = false;
 
 	private ilCtrl $ctrl;
 	private ilGlobalTemplateInterface $tpl;
@@ -83,13 +84,17 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 	protected function init(){
 		global $DIC;
 
-		$DIC["plugin"] = function (\ILIAS\DI\Container $dic ) {return $this->getPlugin();};
+		if(self::$inited){
+			return;
+		}
+		self::$inited = true;
+		$DIC["xlrp_plugin"] = function (\ILIAS\DI\Container $dic ) {return $this->getPlugin();};
 
 		$DIC["custom_renderer_loader"] =  function (\ILIAS\DI\Container $dic ) {
 			return new PluginLoader($dic["ui.component_renderer_loader"],
 				new PluginRendererFactory(
 					$dic["ui.factory"],
-					new PluginTemplateFactory($dic["ui.template_factory"], $dic["plugin"], $dic["tpl"]),
+					new PluginTemplateFactory($dic["ui.template_factory"], $dic["xlrp_plugin"], $dic["tpl"]),
 					$dic["lng"],
 					$dic["ui.javascript_binding"],
 					$dic["refinery"],
@@ -274,14 +279,27 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 		$disabled = true;
 		$links = [$this->factory->link()->standard($this->txt("already_have_account"),
 			'./login.php?cmd=force_login&lang=' . $this->lng->getUserLanguage())];
+		$max_user = $a_properties["max_user"] ?? 0;
+		$occ = $this->getPlugin()->getLocalUserCount();
 
 		if($this->getPlugin()->userCanCreate()){
 			$this->ctrl->setParameterByClass("ilObjCategoryGUI", "ref_id", $this->getPlugin()->getParentCategoryRefID());
 			$links[] = $this->factory->link()->standard($this->txt("administrate_accounts"),
 				$this->ctrl->getLinkTargetByClass("ilObjCategoryGUI", "listUsers")
 			);
+
+			$info_text = ($max_user > 0) ? sprintf($this->txt("occupied_places"), $occ, $max_user): "";
 		}elseif ($this->getPlugin()->userCanRegister()){
 			$disabled = false;
+			if($max_user > 0){
+				$free = $max_user - $occ;
+				if($free > 0){
+					$info_text = sprintf($this->txt("free_places"), $free, $max_user);
+				}else{
+					$info_text = $this->txt("no_free_places");
+				}
+				$disabled = true;
+			}
 		}else{
 			$title = (($title=ilObjSystemFolder::_getHeaderTitle()) !== "") ? $title : ilSetting::_lookupValue("common", "short_inst_name");
 
@@ -293,18 +311,21 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 		if(in_array($a_mode, [self::MODE_PRINT, self::MODE_EDIT, self::MODE_OFFLINE, self::MODE_PREVIEW])){
 			$disabled = true;
 		}
-		$form = $this->registrationForm($disabled);
+		$form = $this->registrationForm($disabled)->withLinks($links)->withInfoText($info_text);
 		if($this->request->getMethod() === "POST"){
-			$form = $form->withRequest($this->request);
-			$success = $this->register($form, $a_properties);
-			if($success){
-				return $this->renderer()->render(
-					$this->factory->link()->standard($this->lng->txt('login_to_ilias'),
-						'./login.php?cmd=force_login&lang=' . $this->lng->getUserLanguage())
-				);
+			if($max_user > 0 && $max_user <= $occ){
+				ilUtil::sendFailure($this->txt("no_free_places"));
+			}else{
+				$form = $form->withRequest($this->request);
+				$success = $this->register($form, $a_properties);
+				if($success){
+					return $this->renderer()->render(
+						$this->factory->link()->standard($this->lng->txt('login_to_ilias'),
+							'./login.php?cmd=force_login&lang=' . $this->lng->getUserLanguage())
+					);
+				}
 			}
 		}
-		$form = $form->withLinks($links);
 
 		return $this->renderer()->render($form);
 	}
@@ -328,7 +349,6 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 			);
 			$importParser->setFolderId($this->getPlugin()->getParentCategoryRefID());
 			$importParser->setXMLContent($this->buildUserImportXML($data, $properties));
-
 			$importParser->startParsing();
 
 			switch ($importParser->getErrorLevel()) {
@@ -458,10 +478,10 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 		$tpl->setCurrentBlock("role");
 		$tpl->setVariable("ROLE_ID", $this->buildRoleImportID((int) $properties["global_role"]));
 		$tpl->setVariable("ROLE_TYPE", "Global");
-		$tpl->setVariable("ROLE_NAME", ilObjRole::_lookupTitle((int) $properties["global_role"]));
+		$tpl->setVariable("ROLE_NAME", ilObjRole::_lookupTitle((int)$properties["global_role"]));
 		$tpl->parseCurrentBlock();
 
-		if($properties["local_role"] !== "" && ilObjRole::_getIdForImportId($properties["local_role"]) !== 0){
+		if($properties["local_role"] !== "" && $this->custom_refinery()->isLokalRoleIDConstraint("", false)->applyTo($properties["local_role"] )->isOK()){
 			$ilias_id = $this->buildRoleImportID($properties["local_role"]);
 			$tpl->setVariable("ROLE_ID", $ilias_id);
 			$tpl->setVariable("ROLE_TYPE", "Local");

@@ -44,4 +44,20 @@ interface RegisterForm extends Standard
 	 * @return void
 	 */
 	public function evaluate();
+
+	/**
+	 * Get The Info Text
+	 *
+	 * @return string
+	 */
+	public function getInfoText(): string;
+
+	/**
+	 * Get a login form like this where links are attached.
+	 *
+	 * @param    string $text
+	 *
+	 * @return    RegisterForm
+	 */
+	public function withInfoText(string $text): RegisterForm;
 }

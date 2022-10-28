@@ -51,6 +51,12 @@ class Renderer extends AbstractComponentRenderer
 	{
 		$tpl = $this->getTemplate("tpl.register_form.html", true, true);
 
+		if($component->getInfoText() != ""){
+			$tpl->setCurrentBlock("info_text");
+			$tpl->setVariable("INFO_TEXT", $component->getInfoText());
+			$tpl->parseCurrentBlock();
+		}
+
 		if ($component->getPostURL() != "") {
 			$tpl->setCurrentBlock("action");
 			$tpl->setVariable("URL", $component->getPostURL());
