@@ -118,7 +118,8 @@ class ilLocalRegistrationPlugin extends ilPageComponentPlugin
 			return $ref_id;
 		}
 
-		if($this->tree->checkForParentType($ref_id, "cat")){
+		if(($this->getParentType() === "copa" || ilObject::_lookupType($ref_id, true) === "copa")
+			&& $this->tree->checkForParentType($ref_id, "cat")){
 			return $this->tree->getParentId($ref_id);
 		}
 		return 0;
