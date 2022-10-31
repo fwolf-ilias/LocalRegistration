@@ -5,7 +5,6 @@
 namespace ILIAS\Plugin\LocalRegistration\UI\Component;
 
 
-use ILIAS\UI\Component\Input\Container\Form\Form;
 use ILIAS\UI\Component\Input\Container\Form\Standard;
 use ILIAS\UI\Component\Link\Standard as Link;
 
@@ -60,4 +59,20 @@ interface RegisterForm extends Standard
 	 * @return    RegisterForm
 	 */
 	public function withInfoText(string $text): RegisterForm;
+
+	/**
+	 * Is this input disabled?
+	 *
+	 * @return    bool
+	 */
+	public function isDisabled(): bool;
+
+	/**
+	 * Get an input like this, but set it to a disabled state.
+	 *
+	 * @param    bool $is_disabled
+	 *
+	 * @return    RegisterForm
+	 */
+	public function withDisabled(bool $is_disabled): RegisterForm;
 }

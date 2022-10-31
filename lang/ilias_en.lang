@@ -21,3 +21,4 @@ welcome#:#Welcome to the %s platform!
 free_places#:#There are still %d of %d places available.
 no_free_places#:#All places are occupied.
 occupied_places#:#There are %d of %d places occupied.
+missing_anonymous_access#:#The page is not in the public area and the registration form cannot be used.

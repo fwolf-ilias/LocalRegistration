@@ -19,5 +19,6 @@ already_have_account#:#Haben Sie bereits ein Konto?
 administrate_accounts#:#Benutzerkonten Verwalten
 welcome#:#Wilkommen auf der Platform %s!
 free_places#:#Es sind noch <b>%d</b> von <b>%d</b> Plätze frei.
-occupied_places#:#Es sind <b>%d</b> von <b>%d</b> Plätzen belegt.
+occupied_places#:#Es sind <b>%d</b> von <b>%d</b> Plätze belegt.
 no_free_places#:#Es sind alle Plätze belegt.
+missing_anonymous_access#:#Die Seite liegt nicht im öffentlichen Bereich und das Registirerungsformular kann nicht verwendet werden.

@@ -130,4 +130,28 @@ class ilLocalRegistrationPlugin extends ilPageComponentPlugin
 	public function getLocalUserCount(): int{
 		return count(ilLocalUser::_getAllUserIds($this->getParentCategoryRefID()));
 	}
+
+	/**
+	 * @param int $usr_id
+	 * @return bool
+	 */
+	public function setIsSelfRegisteredYes(int $usr_id): bool
+	{
+		global $DIC;
+
+		$ilDB = $DIC['ilDB'];
+
+		$query = "UPDATE usr_data SET is_self_registered = 1 " .
+			"WHERE usr_id = %s";
+		$affected = $ilDB->manipulateF(
+			$query,
+			array('integer'),
+			array($usr_id)
+		);
+		if ($affected) {
+			return true;
+		} else {
+			return false;
+		}
+	}
 }

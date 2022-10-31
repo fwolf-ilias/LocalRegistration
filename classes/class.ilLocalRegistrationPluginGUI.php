@@ -38,6 +38,7 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 
 	private \ILIAS\Refinery\Factory $refinery;
 	private ilTabsGUI $tabs;
+	private \ILIAS\DI\RBACServices $rbac;
 
 
 	/** @var ilLocalRegistrationPlugin $plugin */
@@ -54,6 +55,7 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 		$this->request = $DIC->http()->request();
 		$this->refinery = $DIC->refinery();
 		$this->tabs = $DIC->tabs();
+		$this->rbac = $DIC->rbac();
 	}
 
 
@@ -215,6 +217,11 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 		if(isset($selectable_roles[2]))
 			unset($selectable_roles[2]);
 
+		if(!$this->rbac->system()->checkAccessOfUser(ANONYMOUS_USER_ID, "read", $parent_ref_id))
+		{
+			ilUtil::sendFailure($this->txt("missing_anonymous_access"));
+		}
+
 		$welcome = $this->factory->input()->field()->textarea($this->txt("welcome_message"));
 		$global_role = $this->factory->input()->field()->select($this->txt("global_role"), $selectable_roles)
 			->withRequired(true);
@@ -236,7 +243,7 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 		{
 			$prop = $this->getProperties();
 			$max_user = $prop["max_user"];
-			$welcome = $welcome->withValue($prop["welcome"]);
+			$welcome = $welcome->withValue((string)$prop["welcome"]);
 			$global_role = $global_role->withValue((string)$prop["global_role"]);
 			$local_role = $local_role->withValue((string)$prop["local_role"]);
 			$max_user_enabled = $max_user_enabled->withValue((is_numeric($max_user) && (int)$max_user > -1) ? ["max_user" => (int)$max_user] : null);
@@ -285,7 +292,7 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 		if($this->getPlugin()->userCanCreate()){
 			$this->ctrl->setParameterByClass("ilObjCategoryGUI", "ref_id", $this->getPlugin()->getParentCategoryRefID());
 			$links[] = $this->factory->link()->standard($this->txt("administrate_accounts"),
-				$this->ctrl->getLinkTargetByClass("ilObjCategoryGUI", "listUsers")
+				$this->ctrl->getLinkTargetByClass(["ilrepositorygui", "ilObjCategoryGUI"], "listUsers")
 			);
 
 			$info_text = ($max_user > 0) ? sprintf($this->txt("occupied_places"), $occ, $max_user): "";
@@ -297,8 +304,8 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 					$info_text = sprintf($this->txt("free_places"), $free, $max_user);
 				}else{
 					$info_text = $this->txt("no_free_places");
+					$disabled = true;
 				}
-				$disabled = true;
 			}
 		}else{
 			$title = (($title=ilObjSystemFolder::_getHeaderTitle()) !== "") ? $title : ilSetting::_lookupValue("common", "short_inst_name");
@@ -312,7 +319,7 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 			$disabled = true;
 		}
 		$form = $this->registrationForm($disabled)->withLinks($links)->withInfoText($info_text);
-		if($this->request->getMethod() === "POST"){
+		if($this->request->getMethod() === "POST" && !$disabled){
 			if($max_user > 0 && $max_user <= $occ){
 				ilUtil::sendFailure($this->txt("no_free_places"));
 			}else{
@@ -348,13 +355,29 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 				IL_FAIL_ON_CONFLICT
 			);
 			$importParser->setFolderId($this->getPlugin()->getParentCategoryRefID());
+			$role_assignment = [(int)$properties["global_role"] => (int)$properties["global_role"]];
+
+			if($properties["local_role"] !== "" && $this->custom_refinery()->isLokalRoleIDConstraint("", false)
+					->applyTo(new ILIAS\Data\Result\Ok($properties["local_role"]))->isOK()){
+				$id = ilUtil::__extractId($properties["local_role"], IL_INST_ID);
+				$role_assignment[$id] = $id;
+			}
+
+			$importParser->setRoleAssignment($role_assignment);
 			$importParser->setXMLContent($this->buildUserImportXML($data, $properties));
 			$importParser->startParsing();
 
 			switch ($importParser->getErrorLevel()) {
 				case IL_IMPORT_SUCCESS:
+					// Set Self Registered because its true and prevents new Password enforcement after first login
+					$user_id = array_keys($importParser->getUserMapping());
+					$usr_obj = new ilObjUser($user_id[0]);
+					$usr_obj->setLastPasswordChangeToNow();
+					$this->getPlugin()->setIsSelfRegisteredYes($usr_obj->getId());
+
 					ilUtil::sendSuccess(
-						$this->lng->txt("welcome")."<br />".$this->lng->txt('txt_registered'),
+						$this->lng->txt("welcome") . " " . ilObjUser::_lookupFullname($usr_obj->getId()) .
+						" (<b>" . $usr_obj->getLogin() . "</b>)!<br />".$this->lng->txt('txt_registered'),
 						false
 					);
 					return true;
@@ -447,7 +470,7 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 			),
 		];
 
-		return $this->custom_factory()->registerForm($action, $inputs);
+		return $this->custom_factory()->registerForm($action, $inputs)->withDisabled($a_disabled);
 	}
 
 	/**
@@ -481,14 +504,13 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 		$tpl->setVariable("ROLE_NAME", ilObjRole::_lookupTitle((int)$properties["global_role"]));
 		$tpl->parseCurrentBlock();
 
-		if($properties["local_role"] !== "" && $this->custom_refinery()->isLokalRoleIDConstraint("", false)->applyTo($properties["local_role"] )->isOK()){
-			$ilias_id = $this->buildRoleImportID($properties["local_role"]);
-			$tpl->setVariable("ROLE_ID", $ilias_id);
+		if($properties["local_role"] !== "" && $this->custom_refinery()->isLokalRoleIDConstraint("", false)
+				->applyTo(new ILIAS\Data\Result\Ok($properties["local_role"]))->isOK()){
+			$tpl->setVariable("ROLE_ID", $properties["local_role"]);
 			$tpl->setVariable("ROLE_TYPE", "Local");
-			$tpl->setVariable("ROLE_NAME", $ilias_id);
+			$tpl->setVariable("ROLE_NAME", $properties["local_role"]);
+			$tpl->parseCurrentBlock();
 		}
-
-		$tpl->parseCurrentBlock();
 
 		return $tpl->get();
 	}

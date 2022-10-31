@@ -14,6 +14,7 @@ class RegisterForm extends Input\Container\Form\Standard implements \ILIAS\Plugi
 {
 	protected array $links;
 	protected string $info_text;
+	protected bool $disabled = false;
 
     public function __construct(Input\Field\Factory $input_factory, $post_url, array $inputs, array $links)
     {
@@ -55,6 +56,19 @@ class RegisterForm extends Input\Container\Form\Standard implements \ILIAS\Plugi
 	{
 		$clone = clone $this;
 		$clone->info_text = $text;
+
+		return $clone;
+	}
+
+	public function isDisabled():bool
+	{
+		return $this->disabled;
+	}
+
+	public function withDisabled($is_disabled): \ILIAS\Plugin\LocalRegistration\UI\Component\RegisterForm
+	{
+		$clone = clone $this;
+		$clone->disabled = $is_disabled;
 
 		return $clone;
 	}
