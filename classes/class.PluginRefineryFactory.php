@@ -98,19 +98,57 @@ class PluginRefineryFactory
 	}
 
 	/**
+	 *
+	 * @param string $msg error message, to included faulty roles add %s to error message
+	 * @param bool $allow_blank true if empty string is also allowed
 	 * @return Transformation
 	 */
-	public function isLokalRoleIDConstraint($msg, $allow_blank = true): Transformation
+	public function isLokalRoleIDConstraint(string $msg, $allow_blank = true): Transformation
 	{
+		$invalid_roles = [];
 		return $this->refinery->custom()->constraint(
-			function ($var) use ($msg, $allow_blank) {
+			// Function which validates all roles. Roles can either be single or strictly seperated by ', '
+			function ($var) use ($msg, $allow_blank, &$invalid_roles) {
 				if($allow_blank && in_array($var, ["", null]))
 					return true;
-
-				$id = ilUtil::__extractId($var, IL_INST_ID);
-				return is_int($id) && $id > 0 && ilObject::_lookupType($id) == "role";
+				$c = 0;
+				foreach(explode(", ", $var) as $role){
+					$id = ilUtil::__extractId($role, IL_INST_ID);
+					$c++;
+					if( !( is_int($id) && $id > 0 && ilObject::_lookupType($id) == "role") )
+					{
+						$invalid_roles[] =  "$role";
+					}
+				}
+				return empty($invalid_roles) && $c > 0;
 			},
-			$msg
+			// Function to print the error message which includes all as wrong detected roles
+			function () use ($msg, &$invalid_roles) {
+				return sprintf($msg, implode(", ", array_map(fn ($v) => "<b>$v</b>", $invalid_roles)));
+			}
+		);
+	}
+
+	/**
+	 * Transformation which splits a string of role ids by semicolon, comma or whitespace character cleans them
+	 * and returns a string with strict ", " seperated roles
+	 * @return Transformation
+	 */
+	public function normalizeLocalRolesTransformation(): Transformation{
+		return $this->refinery->custom()->transformation(
+
+			function (string $roles): string {
+				$role_array = [];
+				foreach(preg_split( "/[;,\s]/", $roles) as $role)
+				{
+					$role = trim($role);
+					if(!empty($role)) {
+						$role_array[] = $role;
+					}
+				}
+
+				return implode(", ", array_unique($role_array));
+			}
 		);
 	}
 }

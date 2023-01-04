@@ -4,6 +4,7 @@
 <Users>
     <UDFDefinitions></UDFDefinitions>
     <User Id="" Language="{LANG_CODE}" Action="Insert">
+        <Active>{ACTIVE}</Active>
         <Login>{LOGIN}</Login>
         <!-- BEGIN role -->
         <Role Id="{ROLE_ID}" Type="{ROLE_TYPE}" Action="Assign">{ROLE_NAME}</Role>
@@ -16,8 +17,6 @@
         <Gender>{GENDER}</Gender>
         <!-- BEGIN gender -->
         <Matriculation>{MATRICULATION}</Matriculation>
-        <Active>true</Active>
         <AuthMode type="default"/>
-
     </User>
 </Users>

@@ -39,6 +39,7 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 	private \ILIAS\Refinery\Factory $refinery;
 	private ilTabsGUI $tabs;
 	private \ILIAS\DI\RBACServices $rbac;
+	private ilRegistrationSettings $registration_settings;
 
 
 	/** @var ilLocalRegistrationPlugin $plugin */
@@ -56,6 +57,7 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 		$this->refinery = $DIC->refinery();
 		$this->tabs = $DIC->tabs();
 		$this->rbac = $DIC->rbac();
+		$this->registration_settings = new ilRegistrationSettings();
 	}
 
 
@@ -226,6 +228,7 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 		$global_role = $this->factory->input()->field()->select($this->txt("global_role"), $selectable_roles)
 			->withRequired(true);
 		$local_role = $this->factory->input()->field()->text($this->txt("local_role"), $this->txt("local_role_byline"))
+			->withAdditionalTransformation($this->custom_refinery()->normalizeLocalRolesTransformation())
 			->withAdditionalTransformation($this->custom_refinery()->isLokalRoleIDConstraint($this->txt("local_role_not_valid")));
 
 		$max_user = $this->factory->input()->field()->numeric($this->txt("max_user"))
@@ -288,6 +291,7 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 			'./login.php?cmd=force_login&lang=' . $this->lng->getUserLanguage())];
 		$max_user = $a_properties["max_user"] ?? 0;
 		$occ = $this->getPlugin()->getLocalUserCount();
+		$info_text = "";
 
 		if($this->getPlugin()->userCanCreate()){
 			$this->ctrl->setParameterByClass("ilObjCategoryGUI", "ref_id", $this->getPlugin()->getParentCategoryRefID());
@@ -357,10 +361,12 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 			$importParser->setFolderId($this->getPlugin()->getParentCategoryRefID());
 			$role_assignment = [(int)$properties["global_role"] => (int)$properties["global_role"]];
 
-			if($properties["local_role"] !== "" && $this->custom_refinery()->isLokalRoleIDConstraint("", false)
-					->applyTo(new ILIAS\Data\Result\Ok($properties["local_role"]))->isOK()){
-				$id = ilUtil::__extractId($properties["local_role"], IL_INST_ID);
-				$role_assignment[$id] = $id;
+			foreach(explode(", ", $properties["local_role"]) as $local_role){
+				if($local_role !== "" && $this->custom_refinery()->isLokalRoleIDConstraint("", false)
+						->applyTo(new ILIAS\Data\Result\Ok($local_role))->isOK()){
+					$id = ilUtil::__extractId($local_role, IL_INST_ID);
+					$role_assignment[$id] = $id;
+				}
 			}
 
 			$importParser->setRoleAssignment($role_assignment);
@@ -374,6 +380,8 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 					$usr_obj = new ilObjUser($user_id[0]);
 					$usr_obj->setLastPasswordChangeToNow();
 					$this->getPlugin()->setIsSelfRegisteredYes($usr_obj->getId());
+
+					$this->sendMails($usr_obj);
 
 					ilUtil::sendSuccess(
 						$this->lng->txt("welcome") . " " . ilObjUser::_lookupFullname($usr_obj->getId()) .
@@ -489,6 +497,9 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 
 		$tpl = $this->getPlugin()->getTemplate("tpl.user_import.xml", true, true);
 		$tpl->setVariable("LANG_CODE", $this->lng->getUserLanguage());
+		$tpl->setVariable("ACTIVE",
+			in_array($this->registration_settings->getRegistrationType(), [IL_REG_DIRECT, IL_REG_DISABLED]) ? "true": "false"
+		);
 		$tpl->setVariable("LOGIN", $data["ld"]["username"]);
 		$tpl->setVariable("FIRSTNAME", $data["pd"]["firstname"]);
 		$tpl->setVariable("LASTNAME", $data["pd"]["lastname"]);
@@ -504,14 +515,15 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 		$tpl->setVariable("ROLE_NAME", ilObjRole::_lookupTitle((int)$properties["global_role"]));
 		$tpl->parseCurrentBlock();
 
-		if($properties["local_role"] !== "" && $this->custom_refinery()->isLokalRoleIDConstraint("", false)
-				->applyTo(new ILIAS\Data\Result\Ok($properties["local_role"]))->isOK()){
-			$tpl->setVariable("ROLE_ID", $properties["local_role"]);
-			$tpl->setVariable("ROLE_TYPE", "Local");
-			$tpl->setVariable("ROLE_NAME", $properties["local_role"]);
-			$tpl->parseCurrentBlock();
+		foreach(explode(", ", $properties["local_role"]) as $local_role){
+			if($local_role !== "" && $this->custom_refinery()->isLokalRoleIDConstraint("", false)
+					->applyTo(new ILIAS\Data\Result\Ok($local_role))->isOK()){
+				$tpl->setVariable("ROLE_ID", $local_role);
+				$tpl->setVariable("ROLE_TYPE", "Local");
+				$tpl->setVariable("ROLE_NAME", $local_role);
+				$tpl->parseCurrentBlock();
+			}
 		}
-
 		return $tpl->get();
 	}
 
@@ -580,5 +592,47 @@ class ilLocalRegistrationPluginGUI extends ilPageComponentPluginGUI
 		$this->tabs->setForcePresentationOfSingleTab(true);
 		$this->tabs->setBack2Target($this->lng->txt("cancel"), $this->ctrl->getLinkTarget($this, "cancel"));
 		$this->tabs->activateTab($a_active);
+	}
+
+	/**
+	 * @param ilObjUser $user
+	 * @param string $password
+	 * @return void
+	 */
+	private function sendMails(ilObjUser $user, string $password = ""){
+		if ($this->registration_settings->getRegistrationType() == IL_REG_APPROVE) {
+			$mail = new ilRegistrationMailNotification();
+			$mail->setType(ilRegistrationMailNotification::TYPE_NOTIFICATION_CONFIRMATION);
+			$mail->setRecipients($this->registration_settings->getApproveRecipients());
+			$mail->setAdditionalInformation(array('usr' => $user));
+			$mail->send();
+		}else {
+			$mail = new ilRegistrationMailNotification();
+			$mail->setType(ilRegistrationMailNotification::TYPE_NOTIFICATION_APPROVERS);
+			$mail->setRecipients($this->registration_settings->getApproveRecipients());
+			$mail->setAdditionalInformation(array('usr' => $user));
+			$mail->send();
+		}
+
+		if ($this->registration_settings->getRegistrationType() == IL_REG_ACTIVATION) {
+
+			$mail = new ilRegistrationMimeMailNotification();
+			$mail->setType(ilRegistrationMimeMailNotification::TYPE_NOTIFICATION_ACTIVATION);
+			$mail->setRecipients(array($user));
+			$mail->setAdditionalInformation(
+				array(
+					'usr'           => $user,
+					'hash_lifetime' => $this->registration_settings->getRegistrationHashLifetime()
+				)
+			);
+			$mail->send();
+		}else {
+			$accountMail = new ilAccountRegistrationMail(
+				$this->registration_settings,
+				$this->lng,
+				ilLoggerFactory::getLogger('user')
+			);
+			$accountMail->withDirectRegistrationMode()->send($user, $password, false);
+		}
 	}
 }

@@ -11,10 +11,10 @@ cmd_edit#:#Lokale Regististrierung bearbeiten
 welcome_message#:#Begrüßung
 global_role#:#Globale Rolle
 local_role#:#Lokale Rolle
-local_role_byline#:#ILIAS ID der lokalen Rolle aus den Rollen-Einstellungen.
+local_role_byline#:#ILIAS ID der lokalen Rolle aus den Rollen-Einstellungen.</br>Mehrere lokale Rollen können durch Komma ',' oder Leerzeichen ' ' getrennt angegeben werden.
 max_user#:#Maximale Benutzeranzahl
 max_user_enable#:#Maximale Benutzeranzahl aktiviert
-local_role_not_valid#:#Lokale Rolle ist falsch!
+local_role_not_valid#:#Folgende lokale Rollen sind falsch: %s
 already_have_account#:#Haben Sie bereits ein Konto?
 administrate_accounts#:#Benutzerkonten Verwalten
 welcome#:#Willkommen auf der Platform %s!
